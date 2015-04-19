@@ -1,25 +1,93 @@
 ---
 title: "Reproducible Research: Peer Assessment 1"
-output: 
-  html_document:
-    keep_md: true
+author: "Matthew Mariano"
+date: "Wednesday, April 08, 2015"
+output: html_document
+keep_md: true
 ---
 
-
 ## Loading and preprocessing the data
+```{r, echo=TRUE}
+df=read.csv(file="activity.csv",header = T,sep = ",")
+x=!is.na(df$steps)
+df=df[x,]
+library(sqldf)
+df2=sqldf("select sum(steps) ,date from df group by date")
+colnames(df2)=c("total_steps","date")
+n=length(df2$total_steps)
+hist(df2$total_steps,breaks = 10)
 
 
 
 ## What is mean total number of steps taken per day?
 
-
-
+mean1=mean(df2$total_steps)
+median1=median(df2$total_steps)
+message(paste("the mean is:",mean1, "the median is:",median1))
 ## What is the average daily activity pattern?
-
+df3=sqldf("select avg(steps) ,interval from df group by interval")
+colnames(df3)=c("avg","interval")
+plot(x=df3$interval,y=df3$avg,type="l")
+sqldf("select max(avg),interval from df3")
 
 
 ## Imputing missing values
+df=read.csv(file="activity.csv",header = T,sep = ",")
+# first report the number of missing or NA steps
+message(paste("total missing or NA :", sum(is.na(df$steps))))
+#
+x=!is.na(df$steps)
+# first correct the interval ; create a column called int2 which goes from 1 to 288
+# which is the number of 5 minute intervals in a day.
+# the identifier in the original dataset, interval , should go from 0 to 1440 minutes which is the total number of minutes
+# in a day. But it doesn't. Instead it goes from 0 to 155 then jumps to 200 etc.
+int2=rep(seq(1,288),61)
+df=cbind(df,int2)
+# make a copy of the original. This is the dataset that will contain the imputed values
+df0=df
 
-
+df3b=sqldf("select avg(steps)  avg ,interval from df group by interval order by interval")
+#
+for(i in 1:length(df0$steps))
+{
+  if(is.na(df0$steps[i])){
+    interval=df0$interval[i]
+    int2=df0$int2[i]
+    newsteps=df3b$avg[int2]
+    # newsteps is the imputed value
+    df0$steps[i]=newsteps
+  }
+}
+df2=sqldf("select sum(steps) ,date from df0 group by date")
+colnames(df2)=c("total_steps","date")
+n=length(df2$total_steps)
+hist(df2$total_steps,breaks = 10)
+mean2=mean(df2$total_steps)
+median2=median(df2$total_steps)
+message(paste("the mean is:",mean1, "the median is:",median1))
+message(paste("the difference in the mean is:",mean2-mean1))
+message(paste("the difference in the median is:",median2-median1))
 
 ## Are there differences in activity patterns between weekdays and weekends?
+df0$date=as.POSIXct(df0$date)
+day=weekdays(df0$date)
+x=weekdays(df0$date) %in% c("Saturday","Sunday")
+weekend=as.numeric(x)
+df0=cbind(df0,day,weekend)
+# is there a difference in activity between weekends and weekdays? Answer yes , weekends have on average more activity
+sqldf("select avg(steps) from df0 where weekend=0")
+sqldf("select avg(steps) from df0 where weekend=1")
+#
+#
+# now for the final plot
+library(gridExtra)
+library(ggplot2)
+act1=sqldf("select avg(steps) ,int2 from df0 where weekend=0 group by int2")
+act2=sqldf("select avg(steps) ,int2 from df0 where weekend=1 group by int2")
+colnames(act1)=c("avg","interval")
+colnames(act2)=c("avg","interval")
+p1<-ggplot(act1,aes(x=interval,y=avg))+geom_line()+xlab("")+ylab("Average Steps Taken (Weekday)")
+p2<-ggplot(act2,aes(x=interval,y=avg))+geom_line()+xlab("")+ylab("Average Steps Taken (Weekend)")
+grid.arrange(p1, p2, ncol=2)
+dev.off()
+```
